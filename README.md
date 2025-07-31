@@ -12,7 +12,7 @@ A WPF application that demonstrates 16 asynchronous worker threads using the **I
 - **Visual Status Indicators**: Buttons turn green when their corresponding worker is executing
 - **Real-time Logging**: Activity log shows all worker events with descriptive names and timestamps
 - **Control Panel**: Start/Stop all workers and clear the log
-- **Asynchronous Execution**: Each worker simulates work for 0.5-3.5 seconds
+- **Asynchronous Execution**: Each worker simulates work with unique duration patterns based on their business function
 - **Graceful Shutdown**: Proper cancellation token support for clean shutdown
 
 ## Architecture
@@ -29,7 +29,8 @@ The application uses modern .NET hosting patterns:
 
 - **App.xaml.cs**: Sets up the hosting environment and dependency injection container
 - **WorkerHostedService**: IHostedService implementation that manages all workers
-- **WorkerThread**: Individual worker class using Task-based execution loops
+- **WorkerThread**: Abstract base class defining common worker behavior
+- **Specialized Worker Classes**: 16 concrete implementations with unique work simulation patterns
 - **IWorkerLogger**: Interface for logging with dependency injection support
 - **MainWindow**: WPF UI for monitoring and manual control
 
@@ -90,7 +91,7 @@ Each worker:
 - Runs with an **initial interval** for the first execution
 - **Switches to regular interval** after the first execution completes
 - **Can be manually triggered** by clicking its button (immediate execution)
-- Simulates work for 0.5-3.5 seconds (random duration)
+- Simulates work with durations specific to each worker's business function
 - Logs start and completion times with interval transitions
 - Prevents overlapping executions (manual execution skipped if already running)
 - Can be manually started and stopped through the control buttons
@@ -109,6 +110,33 @@ Each worker:
 
 - `App.xaml.cs`: Host builder setup and dependency injection configuration
 - `WorkerHostedService`: IHostedService managing all worker lifecycles
-- `WorkerThread`: Individual worker with Task-based execution loops
+- `WorkerThread`: Abstract base class with common worker functionality
+- `Specialized Workers`: 16 concrete classes each with unique work simulation patterns
 - `IWorkerLogger`: Abstracted logging interface for dependency injection
 - `MainWindow`: WPF UI with dependency injection support
+
+## Specialized Worker Classes
+
+Each worker class extends the abstract `WorkerThread` and implements unique work simulation patterns:
+
+### Quick Operations (0.3-2.0 seconds)
+- **AddressLookupWorker**: Fast database queries (0.5-1.5s)
+- **SendTextWorker**: Quick SMS API calls (0.5-2.0s)  
+- **TextStatusWorker**: Status verification (0.8-1.8s)
+- **DataImportWorker**: Incremental data import (0.3-1.1s)
+- **CompanyBackupWorker**: Fast backup operations (0.8-2.0s)
+
+### Standard Operations (1.0-4.5 seconds)
+- **SendEmailWorker**: Email sending via network (1.0-3.0s)
+- **CreateReminderInstancesWorker**: Database insertions (1.0-2.5s)  
+- **CompanyRestoreWorker**: Validation operations (1.0-2.5s)
+- **EmailStatusWorker**: Batch processing (1.5-4.0s)
+- **RemindersWorker**: Notification sending (1.5-3.5s)
+- **PaymentTransactionCheckWorker**: Financial processing (2.0-4.5s)
+
+### Heavy Operations (2.0-11.0 seconds)
+- **AutoIncompleteVisitRollWorker**: Complex business logic (2.0-5.0s)
+- **SandboxPurgeWorker**: File system operations (2.5-6.0s)
+- **DataCleanupWorker**: Heavy data processing (3.0-7.0s)
+- **SixHourWorker**: Comprehensive system checks (4.0-9.0s)
+- **TenDlcWorker**: Regulatory compliance processing (5.0-11.0s)

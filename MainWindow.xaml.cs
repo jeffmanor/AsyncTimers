@@ -113,7 +113,26 @@ public partial class MainWindow : Window
 
         for (int i = 0; i < regularIntervals.Length; i++)
         {
-            var worker = new WorkerThread(i + 1, workerNames[i], regularIntervals[i], initialIntervals[i], _logger);
+            WorkerThread worker = i switch
+            {
+                0 => new AddressLookupWorker(i + 1, workerNames[i], regularIntervals[i], initialIntervals[i], _logger),
+                1 => new SendEmailWorker(i + 1, workerNames[i], regularIntervals[i], initialIntervals[i], _logger),
+                2 => new SendTextWorker(i + 1, workerNames[i], regularIntervals[i], initialIntervals[i], _logger),
+                3 => new EmailStatusWorker(i + 1, workerNames[i], regularIntervals[i], initialIntervals[i], _logger),
+                4 => new TextStatusWorker(i + 1, workerNames[i], regularIntervals[i], initialIntervals[i], _logger),
+                5 => new AutoIncompleteVisitRollWorker(i + 1, workerNames[i], regularIntervals[i], initialIntervals[i], _logger),
+                6 => new CreateReminderInstancesWorker(i + 1, workerNames[i], regularIntervals[i], initialIntervals[i], _logger),
+                7 => new RemindersWorker(i + 1, workerNames[i], regularIntervals[i], initialIntervals[i], _logger),
+                8 => new DataImportWorker(i + 1, workerNames[i], regularIntervals[i], initialIntervals[i], _logger),
+                9 => new DataCleanupWorker(i + 1, workerNames[i], regularIntervals[i], initialIntervals[i], _logger),
+                10 => new PaymentTransactionCheckWorker(i + 1, workerNames[i], regularIntervals[i], initialIntervals[i], _logger),
+                11 => new SandboxPurgeWorker(i + 1, workerNames[i], regularIntervals[i], initialIntervals[i], _logger),
+                12 => new CompanyBackupWorker(i + 1, workerNames[i], regularIntervals[i], initialIntervals[i], _logger),
+                13 => new CompanyRestoreWorker(i + 1, workerNames[i], regularIntervals[i], initialIntervals[i], _logger),
+                14 => new SixHourWorker(i + 1, workerNames[i], regularIntervals[i], initialIntervals[i], _logger),
+                15 => new TenDlcWorker(i + 1, workerNames[i], regularIntervals[i], initialIntervals[i], _logger),
+                _ => throw new ArgumentOutOfRangeException(nameof(i), "Invalid worker index")
+            };
             _workers.Add(worker);
         }
     }
@@ -233,184 +252,6 @@ public partial class MainWindow : Window
         _uiUpdateTimer.Stop();
         StopAllWorkers();
         base.OnClosing(e);
-    }
-}
-
-public class WorkerThread
-{
-    private readonly int _workerId;
-    private readonly string _workerName;
-    private readonly TimeSpan _regularInterval;
-    private readonly TimeSpan _initialInterval;
-    private readonly IWorkerLogger _logger;
-    private CancellationTokenSource? _cancellationTokenSource;
-    private Task? _workerTask;
-    private volatile bool _isExecuting = false;
-    private volatile bool _isRunning = false;
-    private volatile bool _hasRunInitial = false;
-
-    public bool IsExecuting => _isExecuting;
-    public bool IsRunning => _isRunning;
-    public string WorkerName => _workerName;
-    public int WorkerId => _workerId;
-    public TimeSpan RegularInterval => _regularInterval;
-    public TimeSpan InitialInterval => _initialInterval;
-
-    public WorkerThread(int workerId, string workerName, TimeSpan regularInterval, TimeSpan initialInterval, IWorkerLogger logger)
-    {
-        _workerId = workerId;
-        _workerName = workerName;
-        _regularInterval = regularInterval;
-        _initialInterval = initialInterval;
-        _logger = logger;
-    }
-
-    public void Start()
-    {
-        if (_isRunning) return;
-        
-        _isRunning = true;
-        _hasRunInitial = false;
-        _cancellationTokenSource = new CancellationTokenSource();
-        
-        string initialDescription = GetIntervalDescription(_initialInterval);
-        string regularDescription = GetIntervalDescription(_regularInterval);
-        _logger.LogMessage($"{_workerName} started with {initialDescription} initial interval, then {regularDescription} regular interval");
-
-        // Start the worker task
-        _workerTask = Task.Run(async () => await ExecuteWorkerLoop(_cancellationTokenSource.Token));
-    }
-
-    public void Stop()
-    {
-        if (!_isRunning) return;
-        
-        _isRunning = false;
-        _cancellationTokenSource?.Cancel();
-        _workerTask?.Wait(5000); // Wait up to 5 seconds for graceful shutdown
-        _cancellationTokenSource?.Dispose();
-        _logger.LogMessage($"{_workerName} stopped");
-    }
-
-    private async Task ExecuteWorkerLoop(CancellationToken cancellationToken)
-    {
-        try
-        {
-            while (!cancellationToken.IsCancellationRequested && _isRunning)
-            {
-                // Wait for the appropriate interval
-                TimeSpan waitTime = _hasRunInitial ? _regularInterval : _initialInterval;
-                
-                try
-                {
-                    await Task.Delay(waitTime, cancellationToken);
-                }
-                catch (OperationCanceledException)
-                {
-                    break; // Exit the loop if cancelled
-                }
-
-                if (cancellationToken.IsCancellationRequested || !_isRunning)
-                    break;
-
-                await ExecuteWork(cancellationToken);
-            }
-        }
-        catch (Exception ex)
-        {
-            _logger.LogMessage($"{_workerName} worker loop encountered error: {ex.Message}");
-        }
-    }
-
-    public void ExecuteManually()
-    {
-        // Execute work immediately on a background thread
-        Task.Run(async () =>
-        {
-            if (_isExecuting) return;
-
-            _isExecuting = true;
-            _logger.LogMessage($"{_workerName} starting manual execution...");
-
-            try
-            {
-                // Simulate work with random duration between 0.5-3.5 seconds
-                var random = new Random();
-                var workDuration = TimeSpan.FromSeconds(random.NextDouble() * 3.0 + 0.5);
-                
-                await Task.Delay(workDuration);
-                
-                _logger.LogMessage($"{_workerName} completed manual execution (took {workDuration.TotalSeconds:F1}s)");
-            }
-            catch (Exception ex)
-            {
-                _logger.LogMessage($"{_workerName} encountered error during manual execution: {ex.Message}");
-            }
-            finally
-            {
-                _isExecuting = false;
-            }
-        });
-    }
-
-    private string GetIntervalDescription(TimeSpan interval)
-    {
-        if (interval.TotalDays >= 1)
-            return $"{interval.TotalDays} day(s)";
-        else if (interval.TotalHours >= 1)
-            return $"{interval.TotalHours} hour(s)";
-        else if (interval.TotalMinutes >= 1)
-            return $"{interval.TotalMinutes} minute(s)";
-        else
-            return $"{interval.TotalSeconds} second(s)";
-    }
-
-    private async Task ExecuteWork(CancellationToken cancellationToken)
-    {
-        if (_isExecuting || !_isRunning) return;
-
-        _isExecuting = true;
-        
-        bool wasInitialRun = !_hasRunInitial;
-        if (!_hasRunInitial)
-        {
-            _logger.LogMessage($"{_workerName} starting initial execution...");
-            _hasRunInitial = true;
-        }
-        else
-        {
-            _logger.LogMessage($"{_workerName} starting execution...");
-        }
-
-        try
-        {
-            // Simulate work with random duration between 0.5-3.5 seconds
-            var random = new Random();
-            var workDuration = TimeSpan.FromSeconds(random.NextDouble() * 3.0 + 0.5);
-            
-            await Task.Delay(workDuration, cancellationToken);
-            
-            _logger.LogMessage($"{_workerName} completed execution (took {workDuration.TotalSeconds:F1}s)");
-        }
-        catch (OperationCanceledException)
-        {
-            _logger.LogMessage($"{_workerName} execution was cancelled");
-        }
-        catch (Exception ex)
-        {
-            _logger.LogMessage($"{_workerName} encountered error: {ex.Message}");
-        }
-        finally
-        {
-            _isExecuting = false;
-            
-            // After first execution, log the interval switch
-            if (wasInitialRun && _isRunning)
-            {
-                string regularDescription = GetIntervalDescription(_regularInterval);
-                _logger.LogMessage($"{_workerName} switching to regular {regularDescription} interval");
-            }
-        }
     }
 }
 
